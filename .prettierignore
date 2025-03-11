@@ -1,0 +1,28 @@
+# Build outputs
+dist/
+build/
+
+# Node modules
+node_modules/
+
+# Coverage reports
+coverage/
+
+# Logs
+logs/
+*.log
+
+# Cache directories
+.cache/
+.npm/
+.eslintcache
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db 
