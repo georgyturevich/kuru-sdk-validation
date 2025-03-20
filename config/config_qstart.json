@@ -1,0 +1,5 @@
+{
+  "rpcUrl": "https://testnet-rpc.monad.xyz/",
+  "marginAccountAddress": "0x38453021C50A2b76a8595e3a985f4f4195a3C954",
+  "routerAddress": "0xc4b11B176D4194A0175709cac9fEf9DFD40C005A"
+}

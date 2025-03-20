@@ -35,9 +35,5 @@
   },
   "dependencies": {
     "@kuru-labs/kuru-sdk": "^0.0.39"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node"
   }
 }
