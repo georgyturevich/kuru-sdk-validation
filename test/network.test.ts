@@ -2,6 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import { ethers } from "ethers";
 
 import * as KuruConfig from '../config/config.json';
+import {BlockTag} from "@ethersproject/abstract-provider";
 
 
 describe('Network Test', () => {
@@ -16,68 +17,74 @@ describe('Network Test', () => {
         // Function to find the block number closest to a given timestamp
         async function findBlockByTimestamp(provider: ethers.providers.JsonRpcProvider, targetTimestamp: number): Promise<number> {
             let fetchCount = 0;
+
+            // Cache to prevent refetching blocks
+            const blockCache: Record<BlockTag, ethers.providers.Block> = {};
+
+            // Helper function to get a block (using cache)
+            const getBlock = async (blockNumber: BlockTag): Promise<ethers.providers.Block> => {
+                if (blockCache[blockNumber]) return blockCache[blockNumber];
+                fetchCount++;
+                const block = await provider.getBlock(blockNumber);
+                blockCache[blockNumber] = block;
+                return block;
+            };
+
             // Get the latest block
-            const latestBlock = await provider.getBlock('latest');
+            const latestBlock = await getBlock('latest');
             const now = Math.floor(Date.now() / 1000);
             let high = latestBlock.number;
-            // A few blocks may be generated per second, using a higher multiplier to ensure we go back far enough
-            let low = high - (now - targetTimestamp) * 5; // Taking into account multiple blocks per second
-            
-            // Binary search to find the block closest to the target timestamp
+
+            // Calculate a more reasonable lower bound
+            // Estimate based on average block time (safer with min value to avoid negative)
+            let low = Math.max(0, high - (now - targetTimestamp) * 3);
+
+            // First binary search phase - find the range where the target timestamp might be
             while (low <= high) {
                 const mid = Math.floor((low + high) / 2);
-                
-                const midBlock = await provider.getBlock(mid);
-                fetchCount++;
-                
-                // We don't return immediately on exact match since multiple blocks
-                // may have the same timestamp, and we want the first one
+                const midBlock = await getBlock(mid);
+
                 if (midBlock.timestamp < targetTimestamp) {
                     low = mid + 1;
-                } else {
+                } else if (midBlock.timestamp > targetTimestamp) {
                     high = mid - 1;
+                } else {
+                    // Exact match found - now find the first block with this timestamp
+                    let firstBlockWithTimestamp = mid;
+                    let current = mid - 1;
+
+                    // Check a few blocks before to find the first with this timestamp
+                    // This is more efficient than a full linear scan
+                    while (current >= low) {
+                        const block = await getBlock(current);
+                        if (block.timestamp < targetTimestamp) break;
+                        if (block.timestamp === targetTimestamp) firstBlockWithTimestamp = current;
+                        current--;
+                    }
+
+                    console.log(`Fetch count: ${fetchCount}`);
+                    return firstBlockWithTimestamp;
                 }
             }
-            
-            // At this point, high is the closest block with timestamp < targetTimestamp
-            // and low is the closest block with timestamp >= targetTimestamp
-            
-            // First, check if we have a block with exactly the target timestamp
-            let currentBlock = low;
-            let exactMatch = false;
-            
-            // Find the first block with the target timestamp, if any
-            while (currentBlock <= latestBlock.number) {
-                const block = await provider.getBlock(currentBlock);
-                fetchCount++;
-                
-                if (block.timestamp === targetTimestamp) {
-                    exactMatch = true;
-                    break;
-                } else if (block.timestamp > targetTimestamp) {
-                    break;
-                }
-                
-                currentBlock++;
-            }
-            
-            if (exactMatch) {
-                console.log(`Fetch count: ${fetchCount}`);
-                return currentBlock;
-            }
-            
-            // If no exact match, find the closest block
-            const highBlock = await provider.getBlock(high);
-            fetchCount++;
-            const lowBlock = low <= latestBlock.number ? await provider.getBlock(low) : null;
-            fetchCount++;
-            
+
+            // At this point:
+            // - high is the highest block with timestamp < targetTimestamp
+            // - low is the lowest block with timestamp > targetTimestamp
+
+            // Get both candidates and return the closest one
+            const highBlock = high >= 0 ? await getBlock(high) : null;
+            const lowBlock = low <= latestBlock.number ? await getBlock(low) : null;
+
             console.log(`Fetch count: ${fetchCount}`);
+
+            // Handle edge cases
+            if (!highBlock) return low;
             if (!lowBlock) return high;
-            
+
+            // Return the block with timestamp closest to target
             const highDiff = Math.abs(highBlock.timestamp - targetTimestamp);
             const lowDiff = Math.abs(lowBlock.timestamp - targetTimestamp);
-            
+
             return highDiff <= lowDiff ? high : low;
         }
         
