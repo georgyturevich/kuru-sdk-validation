@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { BlockTag } from "@ethersproject/abstract-provider";
+import {BlockTag, BlockWithTransactions} from "@ethersproject/abstract-provider";
 
 /**
  * Finds the block number closest to a given timestamp using binary search
@@ -125,6 +125,7 @@ export async function retrieveRelatedTransactions(
 }> {
     const transactionsByContract: Record<string, ethers.providers.TransactionResponse[]> = {};
     const allRelatedTransactions: ethers.providers.TransactionResponse[] = [];
+    const blocksByNumber: Record<number, BlockWithTransactions> = {}
     
     // Initialize empty arrays for each contract
     for (const marketName of Object.keys(contractAddresses)) {
@@ -137,10 +138,30 @@ export async function retrieveRelatedTransactions(
     const endBlock = Math.min(startBlockNum + maxBlocks, latestBlock.number);
     
     console.log(`Scanning transactions from block ${startBlockNum} to ${endBlock} [total blocks: ${endBlock - startBlockNum}]...`);
-    
+
+
+    const promises: Promise<BlockWithTransactions>[] = [];
     for (let blockNum = startBlockNum; blockNum <= endBlock; blockNum++) {
-        const blockWithTxs = await provider.getBlockWithTransactions(blockNum);
-        
+        const blockPromise = provider.getBlockWithTransactions(blockNum);
+
+        const saveBlockFunc = (blockNum: number) => {
+            return (block: BlockWithTransactions) => {
+                console.info("Saving block " + blockNum);
+                blocksByNumber[blockNum] = block;
+            }
+        }
+        blockPromise.then(saveBlockFunc(blockNum)).catch(console.error);
+        promises.push(blockPromise);
+    }
+
+    await Promise.all(promises)
+
+    for (let blockNum = startBlockNum; blockNum <= endBlock; blockNum++) {
+        const blockWithTxs = blocksByNumber[blockNum];
+        if (!blockWithTxs) {
+            continue;
+        }
+
         for (const tx of blockWithTxs.transactions) {
             const relatedContracts = getRelatedContracts(tx, contractAddresses);
             
@@ -206,17 +227,19 @@ export function printTransactionResults(
         allRelatedTransactions.forEach((tx, index) => {
             // Find which contract(s) this transaction is related to
             const relatedContracts = getRelatedContracts(tx, contractAddresses);
-                
-            console.log(`\nTransaction ${index + 1}:`);
-            console.log(`- Related to contracts: ${relatedContracts.join(', ')}`);
-            console.log(`- Hash: ${tx.hash}`);
-            console.log(`- Block: ${tx.blockNumber}`);
-            console.log(`- From: ${tx.from}`);
-            console.log(`- To: ${tx.to ?? 'Contract Creation'}`);
-            console.log(`- Value: ${ethers.utils.formatEther(tx.value)} ETH`);
-            console.log(`- Gas Price: ${ethers.utils.formatUnits(tx.gasPrice || 0, 'gwei')} Gwei`);
-            console.log(`- Nonce: ${tx.nonce}`);
+
+            console.log(`\nTransaction ${index + 1}:
+- Related to contracts: ${relatedContracts.join(', ')}
+- Hash: ${tx.hash}
+- Block: ${tx.blockNumber}
+- From: ${tx.from}
+- To: ${tx.to ?? 'Contract Creation'}
+- Value: ${ethers.utils.formatEther(tx.value)} MON
+- Gas Price: ${ethers.utils.formatUnits(tx.gasPrice || 0, 'gwei')} Gwei
+- Gas Limit: ${ethers.utils.formatUnits(tx.gasLimit || 0, 'gwei')} Gwei
+- Nonce: ${tx.nonce}`);
         });
+
     } else {
         console.log("No related transactions found across any contracts. You may want to scan more blocks or check if the contract addresses are correct.");
     }
