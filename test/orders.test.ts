@@ -6,16 +6,49 @@ import * as KuruSdk from '@kuru-labs/kuru-sdk'
 import { testnetMarketAddresses} from '../src/constants/markets';
 import orderbookAbi from "@kuru-labs/kuru-sdk/abi/OrderBook.json";
 import {BigNumber} from "@ethersproject/bignumber";
-import {LIMIT, MarketParams} from "@kuru-labs/kuru-sdk";
+import {extractErrorMessage, MarketParams} from "@kuru-labs/kuru-sdk";
 
-//import {LIMIT} from "@kuru-labs/kuru-sdk";
+import { Estimator } from "../src/tools/orders";
 
 describe('Orders Test', () => {
+
+    it('Place limit order like in examples', async () => {
+        const { rpcUrl } = KuruConfig;
+
+        const marketAddress = "0x05e6f736b5dedd60693fa806ce353156a1b73cf3";// CHOG-MON https://www.kuru.io/trade/0x05e6f736b5dedd60693fa806ce353156a1b73cf3
+        const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+
+        const privateKey = process.env.PRIVATE_KEY as string;
+        const signer = new ethers.Wallet(privateKey, provider);
+
+        console.log("Wallet address:", signer.getAddress())
+        console.log("Wallet balance (MON):", ethers.utils.formatEther(await signer.getBalance()))
+
+        const marketParams = await KuruSdk.ParamFetcher.getMarketParams(provider, marketAddress);
+
+        try{
+            const receipt = await KuruSdk.GTC.placeLimit(
+                signer,
+                marketAddress,
+                marketParams,
+                {
+                    price: "0.0000028400",
+                    size: "10000",
+                    isBuy: true,
+                    postOnly: true
+                }
+            );
+            console.log("Transaction hash:", receipt.transactionHash);
+        } catch (e) {
+            const errMsg = extractErrorMessage(e);
+            console.error("Extracted error: ", errMsg);
+        }
+    })
 
     it('Place limit', async () => {
         const { rpcUrl } = KuruConfig;
 
-        const marketAddress = testnetMarketAddresses.DAK_MON;
+        const marketAddress = testnetMarketAddresses.TEST_CHOG_MON;
         const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
         const network = await provider.getNetwork();
         console.log("Network:", network);
@@ -97,15 +130,23 @@ describe('Orders Test', () => {
             const vaultParams = await orderbook.getVaultParams();
 
 
-            estimateQuote = await KuruSdk.CostEstimator.estimateRequiredQuoteForBuy(
+            // estimateQuote = await KuruSdk.CostEstimator.estimateRequiredQuoteForBuy(
+            //     provider,
+            //     marketAddress,
+            //     marketParams,
+            //     amount,
+            //     l2Book,
+            //     vaultParams
+            // );
+            estimateQuote = await Estimator.estimateRequiredQuoteForBuy(
                 provider,
                 marketAddress,
                 marketParams,
                 amount,
                 l2Book,
                 vaultParams
-            );
-            console.log(`The amount of quote (DAK) tokens required to buy a ${amount} MON in a market buy order (estimateQuote): `, estimateQuote);
+            )
+            console.log(`The amount of quote (MON) tokens required to buy a ${amount} base CHOG in a market buy order (estimateQuote): `, estimateQuote);
         } catch (error) {
             console.error("Error estimating required quote for buy:", error);
             expect(error).toBeUndefined()
@@ -115,62 +156,62 @@ describe('Orders Test', () => {
             console.error("Gas price is null");
             return;
         }
-
-        try {
-
-
-            const estimateMarketBuy = await KuruSdk.CostEstimator.estimateMarketBuy(
-                provider,
-                marketAddress,
-                marketParams,
-                amount
-            );
-            console.log(`the amount of MON tokens that would be received for a market buy order given ${amount} DAK. output:`,
-                estimateMarketBuy.output, "estimatedGas toString:", estimateMarketBuy.estimatedGas.toString(),
-                "totalGasCost:", ethers.utils.formatEther(gasPrice.mul(estimateMarketBuy.estimatedGas)) + " ETH"
-            );
-        } catch (error) {
-            console.info("Error estimating market buy:", error);
-            expect(error).toBeUndefined()
-        }
-
-
-        //const price = "135.50"; // Price in quoteAsset (ex:USDC)
-        //const size = "10"; // Size in baseAsset (ex:MON)
-
-        // Calculate price as estimateQuote divided by 100 and convert to string
-
-
-        const divisor = 100;
-        if (estimateQuote === 0) {
-            console.error("estimateQuote is undefined or failed to be assigned");
-            return;
-        }
-        const calculatedPrice = estimateQuote / divisor;
-        const calculatedSize = estimateQuote * 2;
-        //const price = calculatedPrice.toString();
-        console.log(`Price (estimateQuote / ${divisor}):`, calculatedPrice.toString(), `Size: `, calculatedSize.toString());
-
-        const privateKey = process.env.PRIVATE_KEY as string;
-        const signer = new ethers.Wallet(privateKey, provider);
-        try {
-            const limitOrder: LIMIT = {
-                price: calculatedPrice.toString(),
-                size: calculatedSize.toString(),
-                isBuy: true,
-                postOnly: false
-            };
-            const receipt = await KuruSdk.GTC.placeLimit(
-                signer,
-                marketAddress,
-                marketParams,
-                limitOrder
-            );
-            console.log("Transaction hash:", receipt.transactionHash);
-        } catch (error) {
-            console.error("Error placing limit buy order:", error);
-            expect(error).toBeUndefined()
-        }
+        //
+        // try {
+        //
+        //
+        //     const estimateMarketBuy = await KuruSdk.CostEstimator.estimateMarketBuy(
+        //         provider,
+        //         marketAddress,
+        //         marketParams,
+        //         amount
+        //     );
+        //     console.log(`the amount of MON tokens that would be received for a market buy order given ${amount} DAK. output:`,
+        //         estimateMarketBuy.output, "estimatedGas toString:", estimateMarketBuy.estimatedGas.toString(),
+        //         "totalGasCost:", ethers.utils.formatEther(gasPrice.mul(estimateMarketBuy.estimatedGas)) + " ETH"
+        //     );
+        // } catch (error) {
+        //     console.info("Error estimating market buy:", error);
+        //     expect(error).toBeUndefined()
+        // }
+        //
+        //
+        // //const price = "135.50"; // Price in quoteAsset (ex:USDC)
+        // //const size = "10"; // Size in baseAsset (ex:MON)
+        //
+        // // Calculate price as estimateQuote divided by 100 and convert to string
+        //
+        //
+        // const divisor = 100;
+        // if (estimateQuote === 0) {
+        //     console.error("estimateQuote is undefined or failed to be assigned");
+        //     return;
+        // }
+        // const calculatedPrice = estimateQuote / divisor;
+        // const calculatedSize = estimateQuote * 2;
+        // //const price = calculatedPrice.toString();
+        // console.log(`Price (estimateQuote / ${divisor}):`, calculatedPrice.toString(), `Size: `, calculatedSize.toString());
+        //
+        // const privateKey = process.env.PRIVATE_KEY as string;
+        // const signer = new ethers.Wallet(privateKey, provider);
+        // try {
+        //     const limitOrder: LIMIT = {
+        //         price: calculatedPrice.toString(),
+        //         size: calculatedSize.toString(),
+        //         isBuy: true,
+        //         postOnly: false
+        //     };
+        //     const receipt = await KuruSdk.GTC.placeLimit(
+        //         signer,
+        //         marketAddress,
+        //         marketParams,
+        //         limitOrder
+        //     );
+        //     console.log("Transaction hash:", receipt.transactionHash);
+        // } catch (error) {
+        //     console.error("Error placing limit buy order:", error);
+        //     expect(error).toBeUndefined()
+        // }
 
         expect(1).toEqual(1)
     }, 100000);

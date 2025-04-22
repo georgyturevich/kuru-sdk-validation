@@ -15,17 +15,6 @@ import {
 
 
 describe('Network Test', () => {
-
-    // const jestConsole = console;
-    //
-    // beforeEach(() => {
-    //     global.console = console;
-    // });
-    //
-    // afterEach(() => {
-    //     global.console = jestConsole;
-    // });
-
     it('Get block by timestamp and related transactions', async () => {
         expect(process.env.QUICK_NODE_HASH).not.toBe(undefined);
 
@@ -35,7 +24,6 @@ describe('Network Test', () => {
             if (!rpcUrl.endsWith("/")) {
                 rpcUrl += "/";
             }
-
             rpcUrl += process.env.QUICK_NODE_HASH + "/";
         }
 
